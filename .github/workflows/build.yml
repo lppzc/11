@@ -13,7 +13,7 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4  # 同步升级 checkout 版本以保持一致性
     
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
@@ -37,13 +37,13 @@ jobs:
         # windeployqt release\todolist.exe
         
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4  # 升级到最新版本解决 deprecation 问题
       with:
         name: todolist-windows
         path: release/todolist.exe
         
     - name: Upload distribution package
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4  # 升级到最新版本解决 deprecation 问题
       with:
         name: todolist-windows-dist
         path: dist
