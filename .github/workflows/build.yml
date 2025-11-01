@@ -13,37 +13,44 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4  # 同步升级 checkout 版本以保持一致性
+      uses: actions/checkout@v4  # 升级到最新版本
     
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
       with:
-        version: 5.15.2
+        version: 6.5.2  # 匹配CMakeLists.txt中的Qt6版本
         host: windows
         target: desktop
         arch: win64_msvc2019_64
         
-    - name: Configure project
-      run: qmake -config release todolist.pro
+    - name: Configure CMake
+      run: |
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+      shell: bash  # 使用bash避免路径问题
       
     - name: Build project
-      run: nmake
+      run: |
+        cd build
+        cmake --build . --config Release
+      shell: bash
       
     - name: Create distribution package
       run: |
-        mkdir dist
-        copy release\todolist.exe dist\
-        # 复制必要的 Qt DLLs (如果需要的话)
-        # windeployqt release\todolist.exe
-        
+        mkdir -p dist
+        cp build/Release/TodoListGUI.exe dist/
+        windeployqt --release dist/TodoListGUI.exe
+      shell: bash
+      
     - name: Upload artifact
-      uses: actions/upload-artifact@v4  # 升级到最新版本解决 deprecation 问题
+      uses: actions/upload-artifact@v4  # 升级到最新版本
       with:
         name: todolist-windows
-        path: release/todolist.exe
+        path: build/Release/TodoListGUI.exe
         
     - name: Upload distribution package
-      uses: actions/upload-artifact@v4  # 升级到最新版本解决 deprecation 问题
+      uses: actions/upload-artifact@v4
       with:
         name: todolist-windows-dist
         path: dist
