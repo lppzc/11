@@ -14,16 +14,26 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 安装 MinGW（替代方案）
+      - name: 安装 MSYS2 及 MinGW 工具链
         uses: msys2/setup-msys2@v2
         with:
           update: true
           install: mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake make
 
-      - name: 编译项目（通过 MSYS2 终端）
+      - name: 安装 Qt6（通过 Qt 官方安装器）
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.6'  # 指定 Qt 版本（可根据项目需求调整）
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_mingw'  # 匹配 MinGW 64 位架构
+          install-deps: true
+
+      - name: 编译项目（MSYS2 终端）
         shell: msys2 {0}
         run: |
-          cmake -B build -G "Unix Makefiles"
+          # 告诉 CMake Qt6 的安装路径（关键步骤）
+          cmake -B build -G "Unix Makefiles" -DCMAKE_PREFIX_PATH="${{ steps.install-qt.outputs.qt_dir }}"
           cmake --build build --config Release
 
       - name: 上传编译产物
