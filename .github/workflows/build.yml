@@ -20,19 +20,20 @@ jobs:
           update: true
           install: mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake make
 
-      - name: 安装 Qt6（通过 Qt 官方安装器）
+      - name: 安装 Qt6（包含必要组件）
         uses: jurplel/install-qt-action@v3
         with:
-          version: '6.6'  # 指定 Qt 版本（可根据项目需求调整）
+          version: '6.6'
           host: 'windows'
           target: 'desktop'
-          arch: 'win64_mingw'  # 匹配 MinGW 64 位架构
+          arch: 'win64_mingw'
           install-deps: true
+          # 明确指定需要安装的 Qt 组件（关键）
+          modules: 'qtbase qttools'  # 包含 widgets、gui 及相关工具
 
       - name: 编译项目（MSYS2 终端）
         shell: msys2 {0}
         run: |
-          # 告诉 CMake Qt6 的安装路径（关键步骤）
           cmake -B build -G "Unix Makefiles" -DCMAKE_PREFIX_PATH="${{ steps.install-qt.outputs.qt_dir }}"
           cmake --build build --config Release
 
