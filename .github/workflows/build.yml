@@ -1,78 +1,73 @@
-name: C++ 项目编译（Windows + Qt6）
+# .github/workflows/build.yml
+name: Build
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
   build:
-    runs-on: windows-latest
-    env:
-      QT_INSTALL_DIR: ${{ github.workspace }}/Qt
-
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, windows-2019, macos-10.15]
+        qt_version: [5.15.2]
+    
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-
-      - name: 安装 MSYS2 及 MinGW 工具链
-        uses: msys2/setup-msys2@v2
-        with:
-          update: true
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-g++
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-make
-            mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-libstdc++6
-
-      - name: 验证 MinGW 环境
-        shell: msys2 {0}
-        run: |
-          gcc --version
-          g++ --version
-          cmake --version
-
-      - name: 安装 Qt6
-        uses: jurplel/install-qt-action@v3
-        id: install-qt
-        with:
-          version: '6.6.3'
-          host: 'windows'
-          target: 'desktop'
-          arch: 'win64_mingw'
-          install-deps: true
-          modules: >-
-            qtbase-devel
-            qttools-devel
-            qtwidgets-devel
-            qtgui-devel
-            qtcore-devel
-          dir: ${{ env.QT_INSTALL_DIR }}
-
-      - name: CMake 配置
-        shell: msys2 {0}
-        run: |
-          cmake -B build -G "Unix Makefiles" \
-            -DCMAKE_PREFIX_PATH="${{ steps.install-qt.outputs.qt_dir }}" \
-            -DCMAKE_BUILD_TYPE=Release
-
-      - name: 编译项目
-        shell: msys2 {0}
-        run: |
-          cmake --build build --config Release -j4
-
-      - name: 复制 Qt 运行时依赖
-        shell: msys2 {0}
-        run: |
-          ${{ steps.install-qt.outputs.qt_dir }}/bin/windeployqt.exe \
-            --release \
-            build/todolist.exe
-
-      - name: 上传产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: todolist-windows
-          path: build/
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: ${{ matrix.qt_version }}
+        host: ${{ runner.os }}
+        target: desktop
+        arch: ${{ matrix.arch }}
+        
+    - name: Setup build environment (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgl1-mesa-dev libxcb-xtest0-dev libxcb-xinerama0-dev
+        
+    - name: Configure project (Windows/Linux)
+      if: runner.os != 'macOS'
+      run: qmake -config release todolist.pro
+      
+    - name: Configure project (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        export PATH="/usr/local/opt/qt5/bin:$PATH"
+        qmake -config release todolist.pro
+        
+    - name: Build project (Windows)
+      if: runner.os == 'Windows'
+      run: nmake
+      
+    - name: Build project (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: make
+      
+    - name: Upload artifacts (Windows)
+      if: runner.os == 'Windows'
+      uses: actions/upload-artifact@v3
+      with:
+        name: todolist-windows
+        path: release/todolist.exe
+        
+    - name: Upload artifacts (Linux)
+      if: runner.os == 'Linux'
+      uses: actions/upload-artifact@v3
+      with:
+        name: todolist-linux
+        path: todolist
+        
+    - name: Upload artifacts (macOS)
+      if: runner.os == 'macOS'
+      uses: actions/upload-artifact@v3
+      with:
+        name: todolist-macos
+        path: todolist.app
