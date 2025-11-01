@@ -1,4 +1,4 @@
-name: C++ 项目编译（Windows）
+name: C++ 项目编译（Windows + Qt6）
 
 on:
   push:
@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      # 提前定义 Qt 安装路径变量，避免路径解析错误
+      QT_INSTALL_DIR: ${{ github.workspace }}/Qt
 
     steps:
       - name: 检出代码
@@ -18,27 +21,80 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           update: true
-          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake make
+          # 安装完整的 MinGW 工具链（含依赖库）
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-g++
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-pkg-config  # 解决 Qt 依赖检测问题
+            mingw-w64-x86_64-libstdc++6  # 确保标准库完整
 
-      - name: 安装 Qt6（包含必要组件）
+      - name: 验证 MinGW 环境
+        shell: msys2 {0}
+        run: |
+          # 检查编译器版本，确保环境正常
+          gcc --version
+          g++ --version
+          cmake --version
+
+      - name: 安装 Qt6（带完整依赖）
         uses: jurplel/install-qt-action@v3
+        id: install-qt
         with:
-          version: '6.6'
+          version: '6.6.3'  # 明确版本，避免自动解析错误
           host: 'windows'
           target: 'desktop'
           arch: 'win64_mingw'
           install-deps: true
-          # 明确指定需要安装的 Qt 组件（关键）
-          modules: 'qtbase qttools'  # 包含 widgets、gui 及相关工具
+          # 强制安装所有必要模块（根据 Qt 6.6.3 MinGW 实际支持的模块调整）
+          modules: >-
+            qtbase-devel
+            qttools-devel
+            qtwidgets-devel
+            qtgui-devel
+            qtcore-devel
+          # 自定义安装路径，避免权限问题
+          dir: ${{ env.QT_INSTALL_DIR }}
 
-      - name: 编译项目（MSYS2 终端）
+      - name: 检查 Qt 安装完整性
         shell: msys2 {0}
         run: |
-          cmake -B build -G "Unix Makefiles" -DCMAKE_PREFIX_PATH="${{ steps.install-qt.outputs.qt_dir }}"
-          cmake --build build --config Release
+          # 验证关键配置文件是否存在，提前发现缺失
+          ls ${{ steps.install-qt.outputs.qt_dir }}/lib/cmake/Qt6Widgets/
+          ls ${{ steps.install-qt.outputs.qt_dir }}/lib/cmake/Qt6GuiTools/
 
-      - name: 上传编译产物
+      - name: CMake 配置（带详细日志）
+        shell: msys2 {0}
+        run: |
+          # 启用 Qt 调试日志，方便排查依赖问题
+          cmake -B build -G "Unix Makefiles" \
+            -DCMAKE_PREFIX_PATH="${{ steps.install-qt.outputs.qt_dir }}" \
+            -DQT_DEBUG_FIND_PACKAGE=ON \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: 编译项目
+        shell: msys2 {0}
+        run: |
+          # 并行编译加速，显示详细编译日志
+          cmake --build build --config Release -j4
+          # 验证编译产物是否生成
+          ls build/
+
+      - name: 复制 Qt 运行时依赖（关键！）
+        shell: msys2 {0}
+        run: |
+          # 使用 windeployqt 自动拷贝运行所需的 Qt DLL 和插件
+          ${{ steps.install-qt.outputs.qt_dir }}/bin/windeployqt.exe \
+            --release \
+            --no-translations \
+            build/todolist.exe
+
+      - name: 上传完整产物（含运行时依赖）
         uses: actions/upload-artifact@v4
         with:
-          name: todolist.exe
-          path: build/todolist.exe
+          name: todolist-windows
+          path: |
+            build/todolist.exe
+            build/*.dll
+            build/plugins/  # Qt 插件目录（如平台插件）
