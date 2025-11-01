@@ -13,18 +13,17 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v4  # 升级到最新版本
     
     - name: Install Qt
       uses: jurplel/install-qt-action@v4
       with:
-        version: 6.5.2
+        version: 6.5.2  # 匹配CMakeLists.txt中的Qt6版本
         host: windows
         target: desktop
         arch: win64_msvc2019_64
-        # 移除modules参数，使用默认模块集避免模块名称错误
-        cache: true  # 启用缓存加速安装
-    
+        cache: true
+        
     - name: Configure CMake
       run: |
         mkdir -p build
@@ -42,7 +41,7 @@ jobs:
       run: |
         mkdir -p dist
         cp build/Release/TodoListGUI.exe dist/
-        windeployqt --release dist/TodoListGUI.exe
+        windeployqt --release dist/TodoListGUI.exe  # 自动复制依赖
       shell: bash
       
     - name: Upload artifact
