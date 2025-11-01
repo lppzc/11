@@ -1,5 +1,5 @@
 # .github/workflows/build.yml
-name: Build Windows
+name: Build Multi-Platform
 
 on:
   push:
@@ -8,42 +8,60 @@ on:
     branches: [ main ]
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
-    
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
-    
+      uses: actions/checkout@v4
+
     - name: Install Qt
-      uses: jurplel/install-qt-action@v3
+      uses: jurplel/install-qt-action@v4
       with:
-        version: 5.15.2
-        host: windows
-        target: desktop
-        arch: win64_msvc2019_64
-        
-    - name: Configure project
-      run: qmake -config release todolist.pro
-      
-    - name: Build project
-      run: nmake
-      
-    - name: Create distribution package
+        version: 6.5.2
+        cache: true
+        modules: 'qtbase'
+
+    - name: Configure CMake
       run: |
-        mkdir dist
-        copy release\todolist.exe dist\
-        # 复制必要的 Qt DLLs (如果需要的话)
-        # windeployqt release\todolist.exe
-        
-    - name: Upload artifact
-      uses: actions/upload-artifact@v3
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+      shell: bash
+
+    - name: Build
+      run: |
+        cd build
+        cmake --build . --config Release --parallel
+      shell: bash
+
+    - name: Prepare artifacts
+      run: |
+        mkdir -p dist
+        if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          cp build/Release/TodoListGUI.exe dist/
+          windeployqt --release dist/TodoListGUI.exe
+        elif [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+          cp build/TodoListGUI dist/
+          ldd build/TodoListGUI | grep "=> /" | awk '{print $3}' | xargs -I {} cp {} dist/
+        elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+          cp build/TodoListGUI dist/
+          otool -L build/TodoListGUI | grep -v /System | grep -v /usr/lib | awk '{print $1}' | xargs -I {} cp {} dist/
+        fi
+      shell: bash
+
+    - name: Upload executable
+      uses: actions/upload-artifact@v4
       with:
-        name: todolist-windows
-        path: release/todolist.exe
-        
-    - name: Upload distribution package
-      uses: actions/upload-artifact@v3
+        name: TodoListGUI-${{ matrix.os }}
+        path: ${{ matrix.os == 'windows-latest' ? 'build/Release/TodoListGUI.exe' : 'build/TodoListGUI' }}
+
+    - name: Upload distribution
+      uses: actions/upload-artifact@v4
       with:
-        name: todolist-windows-dist
+        name: TodoListGUI-${{ matrix.os }}-dist
         path: dist
