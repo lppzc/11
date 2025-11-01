@@ -16,31 +16,32 @@ jobs:
       uses: actions/checkout@v4  # 升级到最新版本
     
     - name: Install Qt
-      uses: jurplel/install-qt-action@v3
+      uses: jurplel/install-qt-action@v4  # 升级 Qt 安装工具
       with:
-        version: 6.5.2  # 匹配CMakeLists.txt中的Qt6版本
+        version: 6.5.2  # 匹配项目使用的 Qt6 版本
         host: windows
         target: desktop
         arch: win64_msvc2019_64
+        modules: 'qtbase'  # 显式指定基础模块，避免依赖问题
         
     - name: Configure CMake
       run: |
         mkdir -p build
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release
-      shell: bash  # 使用bash避免路径问题
-      
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=${{ env.Qt6_DIR }}
+      shell: bash  # 使用 bash 处理路径变量
+        
     - name: Build project
       run: |
         cd build
-        cmake --build . --config Release
+        cmake --build . --config Release --parallel
       shell: bash
       
     - name: Create distribution package
       run: |
         mkdir -p dist
         cp build/Release/TodoListGUI.exe dist/
-        windeployqt --release dist/TodoListGUI.exe
+        windeployqt --release dist/TodoListGUI.exe  # 自动复制 Qt 依赖
       shell: bash
       
     - name: Upload artifact
