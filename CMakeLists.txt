@@ -14,4 +14,4 @@ qt6_add_executable(TodoListGUI
     todolist.cpp
 )
 
-target_link_libraries(TodoListGUI Qt6::Core Qt6::Widgets)
+target_link_libraries(TodoListGUI PUBLIC Qt6::Core Qt6::Widgets)
