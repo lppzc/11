@@ -2,33 +2,32 @@ name: C++ 项目编译（Windows）
 
 on:
   push:
-    branches: [main]  # 代码推送至 main 分支时触发
+    branches: [main]
   pull_request:
-    branches: [main]  # PR 提交至 main 分支时触发
+    branches: [main]
 
 jobs:
   build:
-    runs-on: windows-latest  # 使用 GitHub 托管的 Windows 运行器
+    runs-on: windows-latest
 
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 安装 MinGW 工具链
-        uses: egor-tensin/setup-mingw@v2
+      - name: 安装 MinGW（替代方案）
+        uses: msys2/setup-msys2@v2
         with:
-          platform: x64  # 选择 64 位架构
+          update: true
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake make
 
-      - name: 配置 CMake
+      - name: 编译项目（通过 MSYS2 终端）
+        shell: msys2 {0}
         run: |
-          cmake -B build -G "MinGW Makefiles"
-
-      - name: 编译项目
-        run: |
+          cmake -B build -G "Unix Makefiles"
           cmake --build build --config Release
 
       - name: 上传编译产物
         uses: actions/upload-artifact@v4
         with:
           name: todolist.exe
-          path: build/todolist.exe  # 假设可执行文件名为 todolist.exe
+          path: build/todolist.exe
