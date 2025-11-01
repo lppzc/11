@@ -8,7 +8,8 @@ find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
 
 qt6_standard_project_setup()
 
-qt6_add_executable(TodoListGUI
+# 在qt6_add_executable行添加WIN32
+qt6_add_executable(TodoListGUI WIN32
     main.cpp
     todolist.h
     todolist.cpp
