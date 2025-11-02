@@ -9,37 +9,39 @@ on:
 
 jobs:
   build-android:
-    runs-on: windows-latest
-    
+    runs-on: ubuntu-latest  # 切换到Ubuntu，避免Windows路径/包管理器冲突
+    permissions:
+      contents: read
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: false  # 禁用Gradle缓存，避免检测Gradle文件
-    
+        cache: 'gradle'  # 恢复Gradle缓存，Ubuntu环境兼容
+
     - name: Install Android SDK/NDK
       uses: android-actions/setup-android@v3
       with:
         api-level: 33
         ndk-version: 25.1.8937393
         build-tools-version: 33.0.2
-    
+
     - name: Install Qt for Android
       uses: jurplel/install-qt-action@v4
       with:
         version: 6.5.2
-        host: windows
+        host: linux
         target: android
         arch: android_arm64_v8a
         cache: true
         modules: 'qtbase qtgui qtwidgets'
-    
-    - name: Create AndroidManifest.xml (必要配置)
+
+    - name: Create AndroidManifest.xml
       run: |
         mkdir -p android
         cat > android/AndroidManifest.xml << EOF
@@ -67,7 +69,7 @@ jobs:
         </manifest>
         EOF
       shell: bash
-    
+
     - name: Configure CMake for Android
       run: |
         mkdir -p build-android
@@ -78,30 +80,30 @@ jobs:
           -DCMAKE_ANDROID_NDK=${{ env.ANDROID_NDK_ROOT }} \
           -DCMAKE_ANDROID_STL_TYPE=c++_shared \
           -DCMAKE_PREFIX_PATH=${{ env.Qt6_DIR }} \
-          -DANDROID_MANIFEST=../android/AndroidManifest.xml  # 指定清单文件
+          -DANDROID_MANIFEST=../android/AndroidManifest.xml
       shell: bash
-    
-    - name: Build APK (Qt 6 原生打包)
+
+    - name: Build APK
       run: |
         cd build-android
-        cmake --build . --config Release --parallel
-        # Qt 6 会生成 apk 包在 build-android 目录下
+        cmake --build . --config Release --parallel 4
       shell: bash
-    
+
     - name: Locate APK
       id: find-apk
       run: |
         APK_PATH=$(find build-android -name "*.apk" -type f | head -n 1)
         if [ -z "$APK_PATH" ]; then
-          echo "APK 未找到，查找所有可能文件"
-          find build-android -type f
+          echo "APK未找到，打印目录结构"
+          tree build-android
           exit 1
         fi
         echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
       shell: bash
-    
+
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: todolist-android-apk
         path: ${{ env.APK_PATH }}
+        retention-days: 7
