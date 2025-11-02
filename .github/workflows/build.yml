@@ -1,5 +1,5 @@
-# .github/workflows/build-android.yml
-name: Build Android APK
+# .github/workflows/build.yml
+name: Build Windows
 
 on:
   push:
@@ -8,102 +8,50 @@ on:
     branches: [ main ]
 
 jobs:
-  build-android:
-    runs-on: ubuntu-latest  # 切换到Ubuntu，避免Windows路径/包管理器冲突
-    permissions:
-      contents: read
-
+  build-windows:
+    runs-on: windows-latest
+    
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: 'gradle'  # 恢复Gradle缓存，Ubuntu环境兼容
-
-    - name: Install Android SDK/NDK
-      uses: android-actions/setup-android@v3
-      with:
-        api-level: 33
-        ndk-version: 25.1.8937393
-        build-tools-version: 33.0.2
-
-    - name: Install Qt for Android
+      uses: actions/checkout@v4  # 升级到最新版本
+    
+    - name: Install Qt
       uses: jurplel/install-qt-action@v4
       with:
-        version: 6.5.2
-        host: linux
-        target: android
-        arch: android_arm64_v8a
+        version: 6.5.2  # 匹配CMakeLists.txt中的Qt6版本
+        host: windows
+        target: desktop
+        arch: win64_msvc2019_64
         cache: true
-        modules: 'qtbase qtgui qtwidgets'
-
-    - name: Create AndroidManifest.xml
+        
+    - name: Configure CMake
       run: |
-        mkdir -p android
-        cat > android/AndroidManifest.xml << EOF
-        <?xml version="1.0" encoding="utf-8"?>
-        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-            package="com.example.todolist"
-            android:versionCode="1"
-            android:versionName="1.0">
-            <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="33"/>
-            <application
-                android:name="org.qtproject.qt.android.bindings.QtApplication"
-                android:label="TodoList"
-                android:icon="@mipmap/ic_launcher">
-                <activity
-                    android:name="org.qtproject.qt.android.bindings.QtActivity"
-                    android:label="TodoList"
-                    android:configChanges="orientation|uiMode|screenLayout|screenSize|smallestScreenSize|layoutDirection|locale|fontScale|keyboard|keyboardHidden|navigation"
-                    android:launchMode="singleTop">
-                    <<intent-filter>
-                        <action android:name="android.intent.action.MAIN"/>
-                        <category android:name="android.intent.category.LAUNCHER"/>
-                    </</intent-filter>
-                </activity>
-            </application>
-        </manifest>
-        EOF
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
       shell: bash
-
-    - name: Configure CMake for Android
+      
+    - name: Build project
       run: |
-        mkdir -p build-android
-        cd build-android
-        cmake .. -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_SYSTEM_NAME=Android \
-          -DCMAKE_ANDROID_API_LEVEL=33 \
-          -DCMAKE_ANDROID_NDK=${{ env.ANDROID_NDK_ROOT }} \
-          -DCMAKE_ANDROID_STL_TYPE=c++_shared \
-          -DCMAKE_PREFIX_PATH=${{ env.Qt6_DIR }} \
-          -DANDROID_MANIFEST=../android/AndroidManifest.xml
+        cd build
+        cmake --build . --config Release --parallel
       shell: bash
-
-    - name: Build APK
+      
+    - name: Create distribution package
       run: |
-        cd build-android
-        cmake --build . --config Release --parallel 4
+        mkdir -p dist
+        cp build/Release/TodoListGUI.exe dist/
+        windeployqt --release dist/TodoListGUI.exe  # 自动复制依赖
       shell: bash
-
-    - name: Locate APK
-      id: find-apk
-      run: |
-        APK_PATH=$(find build-android -name "*.apk" -type f | head -n 1)
-        if [ -z "$APK_PATH" ]; then
-          echo "APK未找到，打印目录结构"
-          tree build-android
-          exit 1
-        fi
-        echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
-      shell: bash
-
-    - name: Upload APK Artifact
+      
+    - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: todolist-android-apk
-        path: ${{ env.APK_PATH }}
-        retention-days: 7
+        name: todolist-windows
+        path: build/Release/TodoListGUI.exe
+        
+    - name: Upload distribution package
+      uses: actions/upload-artifact@v4
+      with:
+        name: todolist-windows-dist
+        path: dist
