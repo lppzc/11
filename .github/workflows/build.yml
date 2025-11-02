@@ -20,13 +20,13 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
+        cache: false  # 禁用Gradle缓存，避免检测Gradle文件
     
     - name: Install Android SDK/NDK
       uses: android-actions/setup-android@v3
       with:
-        api-level: 33  # 目标Android API级别
-        ndk-version: 25.1.8937393  # 兼容Qt6的NDK版本
+        api-level: 33
+        ndk-version: 25.1.8937393
         build-tools-version: 33.0.2
     
     - name: Install Qt for Android
@@ -35,9 +35,38 @@ jobs:
         version: 6.5.2
         host: windows
         target: android
-        arch: android_arm64_v8a  # 目标架构（arm64-v8a，主流设备兼容）
+        arch: android_arm64_v8a
         cache: true
-        modules: 'qtbase qtgui qtwidgets'  # 必要Qt模块
+        modules: 'qtbase qtgui qtwidgets'
+    
+    - name: Create AndroidManifest.xml (必要配置)
+      run: |
+        mkdir -p android
+        cat > android/AndroidManifest.xml << EOF
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            package="com.example.todolist"
+            android:versionCode="1"
+            android:versionName="1.0">
+            <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="33"/>
+            <application
+                android:name="org.qtproject.qt.android.bindings.QtApplication"
+                android:label="TodoList"
+                android:icon="@mipmap/ic_launcher">
+                <activity
+                    android:name="org.qtproject.qt.android.bindings.QtActivity"
+                    android:label="TodoList"
+                    android:configChanges="orientation|uiMode|screenLayout|screenSize|smallestScreenSize|layoutDirection|locale|fontScale|keyboard|keyboardHidden|navigation"
+                    android:launchMode="singleTop">
+                    <<intent-filter>
+                        <action android:name="android.intent.action.MAIN"/>
+                        <category android:name="android.intent.category.LAUNCHER"/>
+                    </</intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+      shell: bash
     
     - name: Configure CMake for Android
       run: |
@@ -48,19 +77,26 @@ jobs:
           -DCMAKE_ANDROID_API_LEVEL=33 \
           -DCMAKE_ANDROID_NDK=${{ env.ANDROID_NDK_ROOT }} \
           -DCMAKE_ANDROID_STL_TYPE=c++_shared \
-          -DCMAKE_PREFIX_PATH=${{ env.Qt6_DIR }}
+          -DCMAKE_PREFIX_PATH=${{ env.Qt6_DIR }} \
+          -DANDROID_MANIFEST=../android/AndroidManifest.xml  # 指定清单文件
       shell: bash
     
-    - name: Build APK (via CMake-Gradle)
+    - name: Build APK (Qt 6 原生打包)
       run: |
         cd build-android
-        cmake --build . --config Release --target apk
+        cmake --build . --config Release --parallel
+        # Qt 6 会生成 apk 包在 build-android 目录下
       shell: bash
     
     - name: Locate APK
       id: find-apk
       run: |
-        APK_PATH=$(find build-android -name "*.apk" | head -n 1)
+        APK_PATH=$(find build-android -name "*.apk" -type f | head -n 1)
+        if [ -z "$APK_PATH" ]; then
+          echo "APK 未找到，查找所有可能文件"
+          find build-android -type f
+          exit 1
+        fi
         echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
       shell: bash
     
