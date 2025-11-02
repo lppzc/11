@@ -1,5 +1,5 @@
-# .github/workflows/build.yml
-name: Build Windows
+# .github/workflows/build-android.yml
+name: Build Android APK
 
 on:
   push:
@@ -8,50 +8,64 @@ on:
     branches: [ main ]
 
 jobs:
-  build-windows:
+  build-android:
     runs-on: windows-latest
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4  # 升级到最新版本
+      uses: actions/checkout@v4
     
-    - name: Install Qt
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+    
+    - name: Install Android SDK/NDK
+      uses: android-actions/setup-android@v3
+      with:
+        api-level: 33  # 目标Android API级别
+        ndk-version: 25.1.8937393  # 兼容Qt6的NDK版本
+        build-tools-version: 33.0.2
+    
+    - name: Install Qt for Android
       uses: jurplel/install-qt-action@v4
       with:
-        version: 6.5.2  # 匹配CMakeLists.txt中的Qt6版本
+        version: 6.5.2
         host: windows
-        target: desktop
-        arch: win64_msvc2019_64
+        target: android
+        arch: android_arm64_v8a  # 目标架构（arm64-v8a，主流设备兼容）
         cache: true
-        
-    - name: Configure CMake
+        modules: 'qtbase qtgui qtwidgets'  # 必要Qt模块
+    
+    - name: Configure CMake for Android
       run: |
-        mkdir -p build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release
+        mkdir -p build-android
+        cd build-android
+        cmake .. -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_SYSTEM_NAME=Android \
+          -DCMAKE_ANDROID_API_LEVEL=33 \
+          -DCMAKE_ANDROID_NDK=${{ env.ANDROID_NDK_ROOT }} \
+          -DCMAKE_ANDROID_STL_TYPE=c++_shared \
+          -DCMAKE_PREFIX_PATH=${{ env.Qt6_DIR }}
       shell: bash
-      
-    - name: Build project
+    
+    - name: Build APK (via CMake-Gradle)
       run: |
-        cd build
-        cmake --build . --config Release --parallel
+        cd build-android
+        cmake --build . --config Release --target apk
       shell: bash
-      
-    - name: Create distribution package
+    
+    - name: Locate APK
+      id: find-apk
       run: |
-        mkdir -p dist
-        cp build/Release/TodoListGUI.exe dist/
-        windeployqt --release dist/TodoListGUI.exe  # 自动复制依赖
+        APK_PATH=$(find build-android -name "*.apk" | head -n 1)
+        echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
       shell: bash
-      
-    - name: Upload artifact
+    
+    - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: todolist-windows
-        path: build/Release/TodoListGUI.exe
-        
-    - name: Upload distribution package
-      uses: actions/upload-artifact@v4
-      with:
-        name: todolist-windows-dist
-        path: dist
+        name: todolist-android-apk
+        path: ${{ env.APK_PATH }}
